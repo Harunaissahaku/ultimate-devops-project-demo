@@ -1,0 +1,4 @@
+#Generated; DO NOT CHANGE!!!
+#Sat Jan 17 16:32:04 MST 2026
+toolVersion=1.18.1
+options=

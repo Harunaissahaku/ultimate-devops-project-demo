@@ -1,0 +1,4 @@
+src/main/java/oteldemo/problempattern/GarbageCollectionTrigger.java,1768690579562426811,2861,INVALID
+src/main/java/oteldemo/AdService.java,1768690579562255062,12549,INVALID
+src/main/java/oteldemo/problempattern/CPULoad.java,1768690579562356853,3697,INVALID
+src/main/java/oteldemo/problempattern/MemoryUtils.java,1768690579562489685,1869,INVALID
