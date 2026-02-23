@@ -23,13 +23,13 @@ jobs:
 
       - name: Build Go service
         run: |
-          cd src/adservice
+          cd src/ad
           go mod download
-          go build -o adservice main.go
+          go build -o ad main.go
 
       - name: Run tests
         run: |
-          cd src/adservice
+          cd src/ad
           go test ./...
 
   docker:
