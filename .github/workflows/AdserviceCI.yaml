@@ -1,0 +1,80 @@
+name: adservice-ci
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.22
+
+      - name: Build Go service
+        run: |
+          cd src/adservice
+          go mod download
+          go build -o adservice main.go
+
+      - name: Run tests
+        run: |
+          cd src/adservice
+          go test ./...
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker registry
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: src/adservice
+          file: src/adservice/Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/opentelemetry-adservice:${{ github.run_id }}
+          platforms: linux/amd64,linux/arm64
+
+  updatek8s:
+    runs-on: ubuntu-latest
+    needs: docker
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Required for rebase
+
+      - name: Update Kubernetes manifest
+        run: |
+          sed -i "s|image: .*|image: ${{ secrets.DOCKER_USERNAME }}/opentelemetry-adservice:${{ github.run_id }}|" kubernetes/adservice/deploy.yaml
+
+      - name: Commit and push manifest update
+        run: |
+          git config user.email "harunaissahaku21@gmail.com"
+          git config user.name "issahaku"
+          git add kubernetes/adservice/deploy.yaml
+          git commit -m "[CI] Update adservice image tag" || echo "No changes to commit"
+          git pull --rebase origin main
+          git push origin main
