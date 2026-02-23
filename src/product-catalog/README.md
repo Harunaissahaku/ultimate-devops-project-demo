@@ -36,7 +36,10 @@ make docker-generate-protobuf
 
 To bump all dependencies run:
 
+hi
+
 ```sh
 go get -u -t ./...
 go mod tidy
 ```
+
