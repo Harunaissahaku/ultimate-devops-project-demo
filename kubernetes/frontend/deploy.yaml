@@ -27,7 +27,7 @@ spec:
       containers:
         - name: frontend
           # CI/CD will replace IMAGE_TAG dynamically
-          image: issahaku/opentelemetry-frontend:latest
+          image: issahaku/opentelemetry-frontend:26853994578
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
