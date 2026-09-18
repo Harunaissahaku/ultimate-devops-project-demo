@@ -1,4 +1,6 @@
-# Keep the frontend Docker build context small (Dockerfile uses repo root).
+# Applies to every build that uses the repo root as its context
+# (currently frontend and cart). Do not exclude a service whose Dockerfile
+# COPYs from the root -- src/cart is needed by src/cart/src/Dockerfile.
 .git
 .github
 kubernetes
@@ -17,7 +19,6 @@ src/product-catalog
 src/payment
 src/shipping
 src/recommendation
-src/cart
 src/quote
 src/email
 src/kafka

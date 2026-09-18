@@ -1,0 +1,157 @@
+---
+name: cart-service-ci-cd
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/cart/**'
+      - 'pb/**'
+      - '.github/workflows/cart-cicd.yaml'
+
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/cart/**'
+      - 'pb/**'
+
+  workflow_dispatch:
+
+concurrency:
+  group: cart-service-ci-cd-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  CART_PATH: 'src/cart'
+  IMAGE_NAME: cart-service
+
+jobs:
+
+  # ============================================================
+  # 1. BUILD AND TEST
+  # ============================================================
+  build-test:
+    name: Build and Test Cart Service
+    if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[skip ci]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # Just like git clone: download the source code onto the runner.
+      - name: Checkout source code
+        uses: actions/checkout@v6
+
+      # The cart service is C#, so the runner needs the .NET SDK.
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies
+        working-directory: ${{ env.CART_PATH }}
+        run: dotnet restore cart.sln
+
+      - name: Build application
+        working-directory: ${{ env.CART_PATH }}
+        run: dotnet build cart.sln --configuration Release --no-restore
+
+      - name: Run tests
+        working-directory: ${{ env.CART_PATH }}
+        run: dotnet test cart.sln --configuration Release --no-build
+
+  # ============================================================
+  # 2. BUILD DOCKER IMAGE
+  # ============================================================
+  docker:
+    name: Build and Push Docker Image
+    needs: build-test
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v6
+
+      - name: Validate Docker Hub secrets
+        run: |
+          if [ -z "${{ secrets.DOCKER_USERNAME }}" ] || [ -z "${{ secrets.DOCKER_TOKEN }}" ]; then
+            echo "::error::Set DOCKER_USERNAME and DOCKER_TOKEN in Settings → Secrets and variables → Actions"
+            exit 1
+          fi
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Context is the repo root: the Dockerfile COPYs ./src/cart/ and ./pb/,
+      # both of which are resolved relative to the root, not to src/cart.
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./src/cart/src/Dockerfile
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+          sbom: false
+
+  # ============================================================
+  # 3. DEPLOYMENT
+  # ============================================================
+  deploy:
+    name: Update Kubernetes Deployment
+    needs: docker
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Update image tag
+        env:
+          IMAGE: ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        run: |
+          # Scoped to the cartservice container so the busybox initContainer
+          # image further down the manifest is left untouched.
+          sed -i -E "/- name: cartservice/,/imagePullPolicy/ s|^([[:space:]]*)image:.*|\1image: ${IMAGE}|" \
+            kubernetes/cart/deploy.yaml
+          grep -n 'image:' kubernetes/cart/deploy.yaml
+
+      - name: Commit updated Kubernetes manifest
+        env:
+          IMAGE: ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add kubernetes/cart/deploy.yaml
+
+          if git diff --staged --quiet; then
+            echo "No manifest changes to commit"
+            exit 0
+          fi
+
+          git commit -m "chore: update cart-service image to ${IMAGE} [skip ci]"
+          git pull --rebase origin main
+          git push origin HEAD:main
