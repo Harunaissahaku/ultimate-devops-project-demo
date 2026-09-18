@@ -1,4 +1,8 @@
-FROM eclipse-temurin:21-jdk AS builder
+# JDK 17 to satisfy the Gradle toolchain pinned in build.gradle
+# (java { toolchain { languageVersion = 17 } }). Gradle requires a matching
+# JDK to be installed and has no toolchain download repository configured,
+# so a JDK 21 builder fails at :compileJava.
+FROM eclipse-temurin:17-jdk AS builder
 
 WORKDIR /usr/src/app/
 
