@@ -49,8 +49,9 @@ services:
     image: ${IMAGE_NAME}:${DEMO_VERSION}-ad
     container_name: ad
     build:
-      context: ./
-      dockerfile: ${AD_DOCKERFILE}
+      context: ./src/ad
+      # Dockerfile COPYs paths relative to src/ad, not the repo root
+      dockerfile: Dockerfile
       cache_from:
         - ${IMAGE_NAME}:${IMAGE_VERSION}-ad
       args:
@@ -465,8 +466,9 @@ services:
     image: ${IMAGE_NAME}:${DEMO_VERSION}-product-catalog
     container_name: product-catalog
     build:
-      context: ./
-      dockerfile: ${PRODUCT_CATALOG_DOCKERFILE}
+      context: ./src/product-catalog
+      # Dockerfile COPYs paths relative to src/product-catalog, not the repo root
+      dockerfile: Dockerfile
       cache_from:
         - ${IMAGE_NAME}:${IMAGE_VERSION}-product-catalog
     deploy:
@@ -643,7 +645,7 @@ services:
 
   # Kafka used by Checkout, Accounting, and Fraud Detection services
   kafka:
-    image: ghcr.io/open-telemetry/demo:1.12.0-kafka
+    image: ${IMAGE_NAME}:${DEMO_VERSION}-kafka
     container_name: kafka
     build:
       context: ./

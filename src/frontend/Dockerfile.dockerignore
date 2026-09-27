@@ -1,0 +1,7 @@
+# Replaces the root .dockerignore for builds using src/frontend/Dockerfile
+# (context: repo root). Allowlist only what the Dockerfile COPYs.
+*
+!pb/
+!src/frontend/
+src/frontend/node_modules
+src/frontend/.next

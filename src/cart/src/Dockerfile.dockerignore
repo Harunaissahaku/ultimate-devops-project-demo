@@ -1,0 +1,7 @@
+# Replaces the root .dockerignore for builds using src/cart/src/Dockerfile
+# (context: repo root). Allowlist only what the Dockerfile COPYs.
+*
+!pb/
+!src/cart/
+src/cart/**/bin
+src/cart/**/obj

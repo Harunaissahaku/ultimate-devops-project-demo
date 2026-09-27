@@ -1,37 +1,27 @@
-# Applies to every build that uses the repo root as its context
-# (currently frontend and cart). Do not exclude a service whose Dockerfile
-# COPYs from the root -- src/cart is needed by src/cart/src/Dockerfile.
+# Root-context builds (docker compose, and any Dockerfile without its own
+# <Dockerfile>.dockerignore) read this file. Most services COPY ./src/<svc>
+# from the repo root, so only exclude directories no root-context build uses.
+#
+# The frontend and cart CI builds use Dockerfile-specific ignore files instead
+# (src/frontend/Dockerfile.dockerignore, src/cart/src/Dockerfile.dockerignore),
+# which replace this file for those builds.
 .git
 .github
+.claude
+internal
 kubernetes
 test
 docs
 *.md
+**/node_modules
+
+# Built with their own directory as context (CI and docker-compose)
 src/ad
-src/react-native-app
-src/image-provider
-src/currency
-src/flagd-ui
-src/grafana
-src/checkout
-src/fraud-detection
 src/product-catalog
-src/payment
-src/shipping
-src/recommendation
-src/quote
-src/email
-src/kafka
-src/load-generator
-src/frontend-proxy
-src/accounting
+
+# Not built by docker-compose, or only bind-mounted as config
+src/react-native-app
+src/flagd
+src/grafana
 src/otel-collector
 src/prometheus
-src/jaeger
-src/opensearch
-src/flagd
-src/postgresql
-src/redis
-src/minio
-src/loki
-src/tempo

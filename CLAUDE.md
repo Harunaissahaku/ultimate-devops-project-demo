@@ -16,22 +16,25 @@ actively developed in this fork is the DevOps layer:
 Treat `src/` as vendored unless a task explicitly says otherwise. Read upstream docs at
 <https://opentelemetry.io/docs/demo/> rather than reverse-engineering service internals.
 
-## Critical: `.env` is not committed
+## docker-compose and `.env`
 
 `docker-compose.yml` takes **every** image tag, port, and Dockerfile path from `.env` /
-`.env.override`, and neither file exists in this fork (they were never tracked, and `.gitignore`
-now excludes `.env`). Consequence:
+`.env.override`. Both are tracked and are verbatim copies of upstream tag **2.0.0** — the compose
+files match upstream 2.0.0 apart from the fork's edits below. Don't swap in an older upstream `.env`:
+1.x uses the old `src/*service` directory names. Put local changes in `.env.override`, not `.env`.
 
-```
-$ docker compose -f docker-compose.yml config
-invalid spec: :/hostfs:ro: empty section between colons   # ${HOST_FILESYSTEM} is empty
-```
+Without a `.env`, compose fails with
+`invalid spec: :/hostfs:ro: empty section between colons` (`${HOST_FILESYSTEM}` empty).
 
-So `make start`, `make stop`, `make build`, `make redeploy`, and `make run-tests` **cannot work as-is**.
-Fetch `.env` from upstream before suggesting or running any of them. Do not assume a compose-based
-command succeeded; check its exit code.
+Fork edits to the compose files (`docker-compose.yml`, `docker-compose.minimal.yml`):
 
-Per-service builds (below) and the GitHub Actions pipelines do not depend on `.env` and do work.
+- `ad` and `product-catalog` build with `context: ./src/<svc>` and `dockerfile: Dockerfile`,
+  because their Dockerfiles were rewritten for a service-local context (as CI builds them). The
+  `AD_DOCKERFILE` / `PRODUCT_CATALOG_DOCKERFILE` vars in `.env` are therefore unused.
+- The opensearch healthcheck `timeout` is 30s (upstream: 10s).
+
+`make start` pulls upstream's `ghcr.io/open-telemetry/demo:latest-*` images — **not** the Docker
+Hub images this fork's CI pushes. Do not assume a compose-based command succeeded; check its exit code.
 
 ## Per-service build & test
 
@@ -104,19 +107,21 @@ Conventions that must hold for a new or edited workflow:
 
 ### Build contexts differ per service — check before editing `.dockerignore`
 
-`.dockerignore` is read from the **context root**, so it only governs root-context builds.
+BuildKit uses `<Dockerfile>.dockerignore` next to the Dockerfile if one exists, and it **replaces**
+the context-root `.dockerignore` rather than merging with it.
 
-| Service | Context | Dockerfile COPYs | Root `.dockerignore` applies? |
+| Service | Context | Dockerfile COPYs | Ignore file used |
 |---|---|---|---|
-| frontend | `.` | `./src/frontend`, `./pb` | **yes** |
-| cart | `.` | `./src/cart/`, `./pb/` | **yes** |
-| ad | `src/ad` | `./pb` (its own `src/ad/pb/`) | no |
-| product-catalog | `src/product-catalog` | `.` | no |
+| frontend | `.` | `./src/frontend`, `./pb` | `src/frontend/Dockerfile.dockerignore` (allowlist) |
+| cart | `.` | `./src/cart/`, `./pb/` | `src/cart/src/Dockerfile.dockerignore` (allowlist) |
+| ad | `src/ad` | `./pb` (its own `src/ad/pb/`) | none |
+| product-catalog | `src/product-catalog` | `.` | none |
+| other compose services | `.` | `./src/<svc>`, `./pb` | root `.dockerignore` |
 
-The root `.dockerignore` excludes most of `src/*` to keep the context small. **Never add an
-exclusion for a service whose Dockerfile COPYs from the root** — excluding `src/cart` or
-`src/frontend` breaks their own builds. This is already documented in a comment at the top of the
-file; keep it accurate.
+Most compose services build from the repo root and COPY `./src/<svc>`, so **the root `.dockerignore`
+must not exclude any service that builds from the root**. It only excludes directories no
+root-context build reads. The CI builds for frontend and cart keep their small contexts through their
+per-Dockerfile allowlists; if either Dockerfile starts COPYing a new path, add it to that allowlist.
 
 ### The manifest `sed` is the fragile part
 
